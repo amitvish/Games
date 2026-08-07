@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Match</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#f6f5f1;
+    --card:#ffffff;
+    --ink:#1a1a1a;
+    --muted:#8a8a8a;
+    --line:#e8e6e1;
+    --accent:#111111;
+    --radius:20px;
+  }
+  body{
+    font-family: ui-sans-system,-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Arial,sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:24px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%;max-width:420px;display:flex;flex-direction:column;gap:16px}
+  header{display:flex;justify-content:space-between;align-items:baseline}
+  h1{font-size:22px;font-weight:750;letter-spacing:-0.03em}
+  .subtitle{font-size:13px;color:var(--muted);font-weight:500}
+  .stats{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+  }
+  .stat{
+    background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:12px 10px;text-align:center;
+  }
+  .stat .label{font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted)}
+  .stat .value{font-size:18px;font-weight:800;margin-top:4px;letter-spacing:-0.03em}
+  .controls{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;display:flex;flex-direction:column;gap:12px;
+    box-shadow:0 8px 30px rgba(0,0,0,0.04);
+  }
+  .top-controls{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .difficulty{
+    display:flex;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px;
+  }
+  .difficulty button{
+    border:0;background:transparent;font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;cursor:pointer;color:var(--muted);transition:all .15s;
+  }
+  .difficulty button.active{background:var(--accent);color:white}
+  .actions{display:flex;gap:10px}
+  .btn{
+    flex:1;border:1px solid var(--line);background:white;padding:10px 14px;border-radius:999px;font-size:13px;font-weight:650;cursor:pointer;transition:all .15s;
+  }
+  .btn.primary{background:var(--accent);color:white;border-color:var(--accent)}
+  .btn:hover{transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  .board-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px;box-shadow:0 8px 30px rgba(0,0,0,0.04);
+  }
+  .grid{
+    display:grid;gap:10px;
+  }
+  .grid.easy{grid-template-columns:repeat(3,1fr)}
+  .grid.medium{grid-template-columns:repeat(4,1fr)}
+  .grid.hard{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:420px){
+    .grid.hard{grid-template-columns:repeat(4,1fr)}
+  }
+  .card-wrap{aspect-ratio:1;perspective:800px}
+  .card{
+    width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform 0.45s cubic-bezier(0.4,0,0.2,1);cursor:pointer;
+  }
+  .card.flipped{transform:rotateY(180deg)}
+  .card.matched{cursor:default}
+  .card.matched .face.back{border-color:var(--accent);box-shadow: inset 0 0 0 2px white, 0 0 0 2px var(--accent)}
+  .card.matched .face.back::after{content:'✓';position:absolute;top:6px;right:6px;width:18px;height:18px;background:white;border-radius:999px;display:grid;place-items:center;font-size:11px;font-weight:800;color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,0.15)}
+  .face{
+    position:absolute;inset:0;border-radius:14px;border:1px solid var(--line);display:grid;place-items:center;
+    backface-visibility:hidden;font-size:28px;user-select:none;
+  }
+  .face.front{background:var(--bg);font-size:20px;color:#c2bfb8}
+  .face.back{background:white;transform:rotateY(180deg)}
+  .card:not(.flipped):not(.matched):hover .face.front{background:#fff;border-color:#d6d3cc}
+  /* win overlay */
+  .overlay{
+    position:fixed;inset:0;background:rgba(246,245,241,0.75);backdrop-filter:blur(8px);
+    display:none;place-items:center;padding:24px;z-index:10;
+  }
+  .overlay.show{display:grid}
+  .modal{
+    background:white;border:1px solid var(--line);border-radius:22px;padding:28px;width:100%;max-width:360px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.1);
+  }
+  .modal h2{font-size:22px;letter-spacing:-0.03em;margin-bottom:8px}
+  .modal p{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:18px}
+  .modal .big{font-size:13px;font-weight:700;margin-bottom:6px}
+  .confetti{font-size:22px;margin-bottom:10px}
+  footer{text-align:center;font-size:12px;color:var(--muted);margin-top:2px}
+  a{color:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Memory Match</h1>
+    <span class="subtitle">find all pairs</span>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><div class="label">Moves</div><div class="value" id="moves">0</div></div>
+    <div class="stat"><div class="label">Time</div><div class="value" id="time">0s</div></div>
+    <div class="stat"><div class="label">Best</div><div class="value" id="best">—</div></div>
+  </div>
+
+  <div class="controls">
+    <div class="top-controls">
+      <div class="difficulty" id="difficulty">
+        <button data-level="easy">Easy 3×4</button>
+        <button data-level="medium" class="active">Medium 4×4</button>
+        <button data-level="hard">Hard 4×6</button>
+      </div>
+      <span style="font-size:12px;color:var(--muted);font-weight:600" id="progress">0 / 8 pairs</span>
+    </div>
+    <div class="actions">
+      <button class="btn" id="restart">Restart</button>
+      <button class="btn primary" id="newGame">New shuffle</button>
+    </div>
+  </div>
+
+  <div class="board-card">
+    <div class="grid medium" id="grid"></div>
+  </div>
+
+  <footer>
+    Games folder: <code>Desktop/Amit/games</code> — <a href="../tic-tac-toe/index.html">Tic-Tac-Toe</a> • Memory Match
+  </footer>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="confetti">🎉</div>
+    <h2 id="winTitle">You win!</h2>
+    <p id="winDesc"></p>
+    <div class="big" id="winStats"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn" id="playAgain">Play again</button>
+      <button class="btn primary" id="changeLevel">Change level</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS = ["#FF6B6B","#4ECDC4","#45B7D1","#FFA07A","#98D8E8","#F7DC6F","#BB8FCE","#85C1E2","#F8B500","#6C5CE7","#00B894","#FD79A8","#E17055","#00CEC9","#A29BFE","#FDCB6E","#E84393","#55EFC4","#FF7675","#74B9FF","#81ECEC","#FFA502","#7BED9F","#FF6348"];
+const LEVELS = {
+  easy: { cols: 3, rows: 4, pairs: 6, cls: 'easy' },
+  medium: { cols: 4, rows: 4, pairs: 8, cls: 'medium' },
+  hard: { cols: 4, rows: 6, pairs: 12, cls: 'hard' }
+};
+
+const gridEl = document.getElementById('grid');
+const movesEl = document.getElementById('moves');
+const timeEl = document.getElementById('time');
+const bestEl = document.getElementById('best');
+const progressEl = document.getElementById('progress');
+const overlay = document.getElementById('overlay');
+
+let level = 'medium';
+let cards = [];
+let first = null;
+let second = null;
+let lock = false;
+let moves = 0;
+let matched = 0;
+let timer = null;
+let seconds = 0;
+let started = false;
+
+function loadBest() {
+  const raw = localStorage.getItem('memory-best-' + level);
+  if (!raw) { bestEl.textContent = '—'; return; }
+  try {
+    const b = JSON.parse(raw);
+    bestEl.textContent = `${b.moves} in ${b.time}s`;
+  } catch { bestEl.textContent = '—'; }
+}
+function saveBest() {
+  const key = 'memory-best-' + level;
+  const current = { moves, time: seconds };
+  const raw = localStorage.getItem(key);
+  if (!raw) { localStorage.setItem(key, JSON.stringify(current)); loadBest(); return; }
+  const prev = JSON.parse(raw);
+  if (moves < prev.moves || (moves === prev.moves && seconds < prev.time)) {
+    localStorage.setItem(key, JSON.stringify(current));
+    loadBest();
+  }
+}
+
+function startTimer() {
+  if (started) return;
+  started = true;
+  timer = setInterval(() => {
+    seconds++;
+    timeEl.textContent = seconds + 's';
+  }, 1000);
+}
+function stopTimer() {
+  clearInterval(timer);
+  timer = null;
+}
+function resetTimer() {
+  stopTimer();
+  seconds = 0;
+  started = false;
+  timeEl.textContent = '0s';
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function buildDeck() {
+  const cfg = LEVELS[level];
+  const needed = COLORS.slice(0, cfg.pairs);
+  const deck = shuffle([...needed, ...needed]);
+  shuffle(deck);
+  return deck;
+}
+
+function render() {
+  const cfg = LEVELS[level];
+  gridEl.className = 'grid ' + cfg.cls;
+  gridEl.innerHTML = '';
+  cards = buildDeck();
+  moves = 0;
+  matched = 0;
+  first = second = null;
+  lock = false;
+  movesEl.textContent = '0';
+  progressEl.textContent = `0 / ${cfg.pairs} pairs`;
+  resetTimer();
+  overlay.classList.remove('show');
+  loadBest();
+
+  cards.forEach((color, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'card-wrap';
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.color = color;
+    card.dataset.index = idx;
+
+    const front = document.createElement('div');
+    front.className = 'face front';
+    front.textContent = '•';
+
+    const back = document.createElement('div');
+    back.className = 'face back';
+    back.style.background = color;
+    back.style.borderColor = color;
+
+    card.append(front, back);
+    card.addEventListener('click', () => flip(card));
+    wrap.appendChild(card);
+    gridEl.appendChild(wrap);
+  });
+}
+
+function flip(card) {
+  if (lock || card.classList.contains('flipped') || card.classList.contains('matched')) return;
+  startTimer();
+  card.classList.add('flipped');
+  if (!first) {
+    first = card;
+    return;
+  }
+  second = card;
+  moves++;
+  movesEl.textContent = moves;
+  check();
+}
+
+function check() {
+  lock = true;
+  const isMatch = first.dataset.color === second.dataset.color;
+  if (isMatch) {
+    setTimeout(() => {
+      first.classList.add('matched');
+      second.classList.add('matched');
+      matched++;
+      progressEl.textContent = `${matched} / ${LEVELS[level].pairs} pairs`;
+      resetPair();
+      if (matched === LEVELS[level].pairs) win();
+      else lock = false;
+    }, 400);
+  } else {
+    setTimeout(() => {
+      first.classList.remove('flipped');
+      second.classList.remove('flipped');
+      resetPair();
+      lock = false;
+    }, 750);
+  }
+}
+function resetPair() {
+  first = null;
+  second = null;
+}
+function win() {
+  stopTimer();
+  saveBest();
+  document.getElementById('winTitle').textContent = 'Perfect!';
+  document.getElementById('winDesc').textContent = `You found all ${LEVELS[level].pairs} pairs on ${level}.`;
+  document.getElementById('winStats').textContent = `${moves} moves • ${seconds}s`;
+  overlay.classList.add('show');
+}
+
+// controls
+document.getElementById('restart').addEventListener('click', render);
+document.getElementById('newGame').addEventListener('click', render);
+document.getElementById('playAgain').addEventListener('click', render);
+document.getElementById('changeLevel').addEventListener('click', () => {
+  overlay.classList.remove('show');
+  document.getElementById('difficulty').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+document.querySelectorAll('#difficulty button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#difficulty button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    level = btn.dataset.level;
+    render();
+  });
+});
+overlay.addEventListener('click', (e) => {
+  if (e.target === overlay) overlay.classList.remove('show');
+});
+
+render();
+</script>
+</body>
+</html>
